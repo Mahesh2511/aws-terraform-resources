@@ -2,6 +2,11 @@ name: EKS k8 Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      action:
+        description: "apply or destroy"
+        required: true
+        default: "apply"
 
 jobs:
   terraform:
@@ -27,17 +32,26 @@ jobs:
         working-directory: ./terraform/k8
         run: terraform init
 
+      # ✅ Plan only for apply
       - name: Terraform Plan
+        if: github.event.inputs.action == 'apply'
         working-directory: ./terraform/k8
         run: terraform plan
 
       - name: Terraform Apply
         id: apply
+        if: github.event.inputs.action == 'apply'
         working-directory: ./terraform/k8
         run: terraform apply -auto-approve
 
-      # 🔥 Runs ONLY if apply fails
+      # ✅ Destroy when explicitly requested
+      - name: Terraform Destroy (manual)
+        if: github.event.inputs.action == 'destroy'
+        working-directory: ./terraform/k8
+        run: terraform destroy -auto-approve
+
+      # 🔥 Destroy ONLY if apply fails (and only in apply mode)
       - name: Terraform Destroy (on failure)
-        if: failure()
+        if: failure() && github.event.inputs.action == 'apply'
         working-directory: ./terraform/k8
         run: terraform destroy -auto-approve
