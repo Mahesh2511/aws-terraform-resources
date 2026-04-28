@@ -1,3 +1,10 @@
+provider "aws" {
+  region = "ap-south-1"
+}
+
+########################
+# VPC
+########################
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "5.0.0"
@@ -13,32 +20,44 @@ module "vpc" {
   single_nat_gateway = true
 
   tags = {
-    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/cluster/demo-eks-webapp-v4" = "shared"
   }
 }
 
+########################
+# EKS
+########################
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "20.0.0"
 
-  cluster_name    = var.cluster_name
-  cluster_version = "1.28"
+  cluster_name    = "demo-eks-webapp-v4"
+  cluster_version = "1.33"   # ✅ latest stable
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
+  # 🔥 Important settings
+  cluster_endpoint_public_access = true
   enable_cluster_creator_admin_permissions = true
+  enable_kms_key = false
 
+  ########################
+  # Node Group
+  ########################
   eks_managed_node_groups = {
     default = {
       desired_size = 2
       min_size     = 1
       max_size     = 3
 
-      instance_types = ["t3.medium"]
-      capacity_type  = "ON_DEMAND"
+      # ✅ Avoid capacity issues
+      instance_types = ["t3.small", "t3.medium"]
 
-      ami_type = "AL2_x86_64"
+      # ✅ Modern AMI (IMPORTANT)
+      ami_type = "AL2023_x86_64_STANDARD"
+
+      capacity_type = "ON_DEMAND"
     }
   }
 
