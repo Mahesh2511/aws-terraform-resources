@@ -1,51 +1,67 @@
-resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
+provider "aws" {
+  region = "ap-south-1"
 }
 
-resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  map_public_ip_on_launch = true
-}
+########################
+# VPC
+########################
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "5.0.0"
 
-resource "aws_internet_gateway" "gw" {
-  vpc_id = aws_vpc.main.id
-}
+  name = "eks-vpc"
+  cidr = "10.0.0.0/16"
 
-resource "aws_route_table" "rt" {
-  vpc_id = aws_vpc.main.id
-}
+  azs             = ["ap-south-1a", "ap-south-1b"]
+  public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
+  private_subnets = ["10.0.3.0/24", "10.0.4.0/24"]
 
-resource "aws_route" "r" {
-  route_table_id         = aws_route_table.rt.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.gw.id
-}
+  enable_nat_gateway = true
+  single_nat_gateway = true
 
-resource "aws_route_table_association" "a" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.rt.id
-}
-
-resource "aws_security_group" "sg" {
-  vpc_id = aws_vpc.main.id
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+  tags = {
+    "kubernetes.io/cluster/demo-eks-webapp-v4" = "shared"
   }
 }
 
-resource "aws_instance" "vm" {
-  ami           = "ami-0f58b397bc5c1f2e8" # Amazon Linux (ap-south-1)
-  instance_type = var.instance_type
-  subnet_id     = aws_subnet.public.id
+########################
+# EKS
+########################
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "20.0.0"
 
-  vpc_security_group_ids = [aws_security_group.sg.id]
+  cluster_name    = "demo-eks-webapp-v4"
+  cluster_version = "1.33"   # ✅ latest stable
+
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = module.vpc.private_subnets
+
+  # 🔥 Important settings
+  cluster_endpoint_public_access = true
+  enable_cluster_creator_admin_permissions = true
+  enable_kms_key = false
+
+  ########################
+  # Node Group
+  ########################
+  eks_managed_node_groups = {
+    default = {
+      desired_size = 2
+      min_size     = 1
+      max_size     = 3
+
+      # ✅ Avoid capacity issues
+      instance_types = ["t3.small", "t3.medium"]
+
+      # ✅ Modern AMI (IMPORTANT)
+      ami_type = "AL2023_x86_64_STANDARD"
+
+      capacity_type = "ON_DEMAND"
+    }
+  }
 
   tags = {
-    Name = "Terraform-VM"
+    Environment = "dev"
   }
 }
