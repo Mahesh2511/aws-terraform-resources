@@ -14,7 +14,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.6.6   # 👈 IMPORTANT
+          terraform_version: 1.6.6
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -23,24 +23,21 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-south-1
 
-      - name: Clean Terraform Cache
-        working-directory: ./terraform/k8
-        run: |
-          rm -rf .terraform
-          rm -f .terraform.lock.hcl
-
       - name: Terraform Init
         working-directory: ./terraform/k8
-        run: terraform init -upgrade
-
-      - name: Terraform Providers (Debug)
-        working-directory: ./terraform/k8
-        run: terraform providers
+        run: terraform init
 
       - name: Terraform Plan
         working-directory: ./terraform/k8
         run: terraform plan
 
       - name: Terraform Apply
+        id: apply
         working-directory: ./terraform/k8
         run: terraform apply -auto-approve
+
+      # 🔥 Runs ONLY if apply fails
+      - name: Terraform Destroy (on failure)
+        if: failure()
+        working-directory: ./terraform/k8
+        run: terraform destroy -auto-approve
