@@ -1,8 +1,7 @@
 name: Terraform Deploy
 
 on:
-
-    workflow_dispatch: 
+  workflow_dispatch:
 
 jobs:
   terraform:
@@ -23,13 +22,21 @@ jobs:
           aws-region: ap-south-1
 
       - name: Terraform Init
-        run: terraform init
         working-directory: ./terraform
+        run: terraform init
 
       - name: Terraform Plan
-        run: terraform plan
         working-directory: ./terraform
+        run: terraform plan
 
       - name: Terraform Apply
-        run: terraform apply -destroy -auto-approve
+        id: apply_step
         working-directory: ./terraform
+        run: terraform apply -auto-approve
+        continue-on-error: true
+
+      # 👇 Destroy only if Apply fails
+      - name: Terraform Destroy (on failure)
+        if: failure() && steps.apply_step.outcome == 'failure'
+        working-directory: ./terraform
+        run: terraform destroy -auto-approve
